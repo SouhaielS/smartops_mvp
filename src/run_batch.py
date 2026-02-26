@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("run_batch")
-
+logger.info("DEBUG_RUN_BATCH_FILE: %s", __file__)
 
 # --------------------------------------------------
 # MAIN BATCH FUNCTION
