@@ -132,7 +132,8 @@ def extract_invoice_fields(pdf_path: str | Path) -> Dict[str, object]:
     text = _clean_text(text or "")
 
     # DEBUG: show first characters to understand what pdfminer reads
-    print("DEBUG_PDF_TEXT_PREVIEW:", text[:300])
+    import logging
+logging.warning("DEBUG_PDF_TEXT_PREVIEW: %s", (text or "")[:300])
 
     # If pdf has no text, it's likely scanned -> needs OCR
     if not text:
