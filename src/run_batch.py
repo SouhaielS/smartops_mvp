@@ -4,36 +4,30 @@ import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 import pandas as pd
 
 from src.extract_invoice import extract_invoice_fields
 
-
-# --------------------------------------------------
-# FORCE LOGGING CONFIG (important for hosted env)
-# --------------------------------------------------
+# Force logging in hosted envs (Streamlit Cloud can override logging)
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s:%(name)s:%(message)s",
-    force=True
+    force=True,
 )
 
 logger = logging.getLogger("run_batch")
 logger.info("DEBUG_RUN_BATCH_FILE: %s", __file__)
 
-# --------------------------------------------------
-# MAIN BATCH FUNCTION
-# --------------------------------------------------
+
 def run_batch(
     invoice_dir: str | Path,
     po_register_path: str | Path,
     output_workbook_path: str | Path,
 ) -> None:
-
     batch_id = uuid.uuid4().hex[:10]
-    processed_at = datetime.utcnow().isoformat()
+    processed_at = datetime.utcnow().isoformat(timespec="seconds")
 
     invoice_dir = Path(invoice_dir)
     po_register_path = Path(po_register_path)
@@ -44,26 +38,17 @@ def run_batch(
     logger.info("PO register: %s", po_register_path)
     logger.info("Output workbook: %s", output_workbook_path)
 
-    # --------------------------------------------------
-    # Load PO register
-    # --------------------------------------------------
-    po_df = pd.read_excel(po_register_path)
+    # Load PO register (kept for future checks; not used yet)
+    _po_df = pd.read_excel(po_register_path)
 
     results: List[Dict] = []
 
-    # --------------------------------------------------
-    # Process each invoice
-    # --------------------------------------------------
     for pdf_path in invoice_dir.glob("*.pdf"):
-
         logger.info("Processing: %s", pdf_path.name)
 
-        # 🔍 DEBUG CALL
+        # Debug around extractor (must appear in logs)
         logger.info("DEBUG_CALL_EXTRACTOR: %s", pdf_path)
-
         fields = extract_invoice_fields(pdf_path)
-
-        # 🔍 DEBUG RESULT
         logger.info("DEBUG_EXTRACT_RESULT: %s", fields)
 
         po_number = fields.get("po_number")
@@ -76,11 +61,9 @@ def run_batch(
         if not invoice_number:
             status = "NEEDS_REVIEW"
             reason = "Invoice number missing"
-
         elif not po_number:
             status = "NEEDS_REVIEW"
             reason = "PO number missing"
-
         elif invoice_amount is None:
             status = "NEEDS_REVIEW"
             reason = "Invoice amount missing"
@@ -100,10 +83,6 @@ def run_batch(
 
         logger.info("Status: %s | Reason: %s", status, reason)
 
-    # --------------------------------------------------
-    # Save batch output
-    # --------------------------------------------------
-    result_df = pd.DataFrame(results)
-    result_df.to_excel(output_workbook_path, index=False)
-
+    output_workbook_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(results).to_excel(output_workbook_path, index=False)
     logger.info("Batch completed successfully.")
