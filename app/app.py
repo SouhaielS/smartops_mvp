@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]   # project root
+sys.path.append(str(ROOT))
 import streamlit as st
 from pathlib import Path
 import shutil
