@@ -7,7 +7,7 @@ from typing import Dict, Optional, Tuple
 
 from pdfminer.high_level import extract_text
 
-logging.warning("DEBUG_EXTRACTOR_FILE: %s", __file__)
+logging.info("DEBUG_EXTRACTOR_FILE: %s", __file__)
 
 
 def _clean_text(text: str) -> str:
@@ -76,7 +76,7 @@ def _extract_fields_from_text(text: str) -> Tuple[Optional[str], Optional[str], 
 def extract_invoice_fields(pdf_path: str | Path) -> Dict[str, object]:
     pdf_path = Path(pdf_path)
 
-    logging.warning("DEBUG_PDF_PATH: %s", pdf_path)
+    logging.info("DEBUG_PDF_PATH: %s", pdf_path)
 
     try:
         raw_text = extract_text(str(pdf_path)) or ""
@@ -86,14 +86,18 @@ def extract_invoice_fields(pdf_path: str | Path) -> Dict[str, object]:
 
     text = _clean_text(raw_text)
 
-    logging.warning("DEBUG_TEXT_LEN: %s", len(text))
-    logging.warning("DEBUG_PDF_TEXT_PREVIEW: %s", text[:300])
+    logging.info("DEBUG_TEXT_LEN: %s", len(text))
+    logging.info("DEBUG_PDF_TEXT_PREVIEW: %s", text[:300])
 
     if not text:
         return {"po_number": None, "invoice_number": None, "invoice_amount": None}
 
     po, inv, amt = _extract_fields_from_text(text)
 
-    logging.warning("DEBUG_EXTRACTED: po=%s inv=%s amt=%s", po, inv, amt)
+    logging.info("DEBUG_EXTRACTED: po=%s inv=%s amt=%s", po, inv, amt)
 
-    return {"po_number": po, "invoice_number": inv, "invoice_amount": amt}
+    return {
+        "po_number": po,
+        "invoice_number": inv,
+        "invoice_amount": amt,
+    }

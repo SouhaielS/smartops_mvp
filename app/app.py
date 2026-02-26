@@ -1,3 +1,5 @@
+import logging
+logging.basicConfig(level=logging.INFO, force=True)
 import sys
 from pathlib import Path
 
