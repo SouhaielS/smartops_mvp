@@ -1,3 +1,5 @@
+import logging
+logging.warning("DEBUG_EXTRACTOR_FILE: %s", __file__)
 from __future__ import annotations
 
 import re
