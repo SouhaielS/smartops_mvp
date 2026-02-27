@@ -10,7 +10,6 @@ import pandas as pd
 
 from src.extract_invoice import extract_invoice_fields
 
-# Force logging in hosted env (Streamlit can override logging)
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s:%(name)s:%(message)s",
@@ -20,20 +19,13 @@ logging.basicConfig(
 logger = logging.getLogger("run_batch")
 
 
-def run_batch(
-    invoice_dir: str | Path,
-    po_register_path: str | Path,
-    output_workbook_path: str | Path,
-) -> None:
+def run_batch(invoice_dir: str | Path, po_register_path: str | Path, output_workbook_path: str | Path) -> None:
     batch_id = uuid.uuid4().hex[:10]
     processed_at = datetime.utcnow().isoformat(timespec="seconds")
 
     invoice_dir = Path(invoice_dir)
     po_register_path = Path(po_register_path)
     output_workbook_path = Path(output_workbook_path)
-
-    # Put file path info inside always-visible logs
-    logger.info("RUN_BATCH_FILE: %s", __file__)
 
     logger.info("Batch ID: %s | Processed at: %s", batch_id, processed_at)
     logger.info("Invoice dir: %s", invoice_dir)
@@ -49,7 +41,6 @@ def run_batch(
         logger.info("Processing: %s", pdf_path.name)
 
         fields = extract_invoice_fields(pdf_path)
-
         po_number = fields.get("po_number")
         invoice_number = fields.get("invoice_number")
         invoice_amount = fields.get("invoice_amount")
@@ -80,8 +71,8 @@ def run_batch(
             }
         )
 
-        # ✅ GUARANTEED diagnosis: fields printed inside Status line
-        logger.info("Status: %s | Reason: %s | Fields: %s", status, reason, fields)
+        # ✅ UNIQUE MARKER (short, cannot be filtered)
+        logger.info("STATUS_V2_MARKER: %s | %s", status, reason)
 
     output_workbook_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(results).to_excel(output_workbook_path, index=False)
