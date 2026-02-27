@@ -144,41 +144,20 @@ def _extract_fields_from_text(
     text: str,
 ) -> Tuple[Optional[str], Optional[str], Optional[float]]:
 
+    # ---------------- PO patterns ----------------
     po_patterns = [
-    # PO: 2025003 / PO #2025003 / PO Number: 2025003
-    r"\bPO[_\s-]*(?:Number|No\.?|N°|#)?\s*[:#]?\s*([0-9]{3,20})\b",
-    r"\bPO\s*(?:Number|No\.?|N°|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
+        r"\bPO[_\s-]*(?:Number|No\.?|N°|#)?\s*[:#]?\s*([0-9]{3,20})\b",
+        r"\bPurchase\s*Order[_\s-]*(?:Number|No\.?|N°|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
+        r"\bBon\s+de\s+commande\s*(?:Num(?:éro)?|N°|No\.?|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
+    ]
 
-    # Purchase Order: XXXXX
-    r"\bPurchase\s*Order\s*(?:Number|No\.?|N°|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
+    po = _find_first(po_patterns, text)
 
-    # Bon de commande: XXXXX
-    r"\bBon\s+de\s+commande\s*(?:Num(?:éro)?|N°|No\.?|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
-
-    # PO reference: XXXXX
-    r"\bPO\s*(?:Ref(?:erence)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
-]
-
+    # ---------------- Invoice patterns ----------------
     inv_patterns = [
         r"\b(INV[\-\/_.]?[0-9A-Z][0-9A-Z\-\/_.]{2,})\b",
         r"\b(INVOICE[\-\/_.]?[0-9A-Z][0-9A-Z\-\/_.]{2,})\b",
     ]
-
-    amount_patterns = [
-    # Total TTC (value may be on next line)
-    r"\bTotal\s*TTC\b\s*[:#]?\s*([\s\n]*)([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
-
-    # Net à payer / Amount Due (value may be on next line)
-    r"\b(?:Net\s*(?:to\s*pay|à\s*payer)|Amount\s*Due)\b\s*[:#]?\s*([\s\n]*)([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
-
-    # Total Amount
-    r"\bTotal\s*(?:Amount)?\b\s*[:#]?\s*([\s\n]*)([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
-
-    # Montant Total / Montant TTC
-    r"\bMontant\s*(?:TTC|Total)\b\s*[:#]?\s*([\s\n]*)([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
-]
-
-    po = _find_first(po_patterns, text)
 
     inv = _find_first(inv_patterns, text)
     inv = _normalize_id(inv)
@@ -189,13 +168,21 @@ def _extract_fields_from_text(
     if inv is None:
         inv = _extract_invoice_heuristic(text)
 
+    # ---------------- Amount patterns ----------------
+    amount_patterns = [
+        r"\bTotal\s*TTC\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+        r"\b(?:Net\s*(?:to\s*pay|à\s*payer)|Amount\s*Due)\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+        r"\bTotal\s*(?:Amount)?\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+        r"\bMontant\s*(?:TTC|Total)\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+    ]
+
     amt_raw = None
-for pat in amount_patterns:
-    m = re.search(pat, text, flags=re.IGNORECASE)
-    if m:
-        # amount is group(2)
-        amt_raw = m.group(2)
-        break
+    for pat in amount_patterns:
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if m:
+            amt_raw = m.group(1)
+            break
+
     amt = _parse_amount(amt_raw) if amt_raw else None
 
     return po, inv, amt
