@@ -79,6 +79,7 @@ def _parse_amount(raw: str) -> Optional[float]:
 # Invoice extraction via label
 # --------------------------------------------------
 def _extract_invoice_by_label(text: str) -> Optional[str]:
+
     label_patterns = [
         r"(?:Invoice\s*(?:No\.?|Number|N°|Nº|Num(?:ber)?)"
         r"|Facture\s*(?:N°|Nº|No\.?|Num(?:éro)?)"
@@ -94,11 +95,13 @@ def _extract_invoice_by_label(text: str) -> Optional[str]:
             candidate = candidate.split("\n", 1)[0]
             candidate = candidate.strip()
 
+            # Guardrail: avoid capturing placeholder labels
+            if re.search(r"\bPO_NUMBER\b|\bPO\s*NUMBER\b|\bPURCHASE\s*ORDER\b", candidate, flags=re.IGNORECASE):
+                continue
+
             chunks = re.split(r"\s+", candidate)
             candidate = " ".join(chunks[:3])
-# Guardrails: don't accept values that look like placeholders/labels
-if re.search(r"\bPO_NUMBER\b|\bPO\s*NUMBER\b|\bPURCHASE\s*ORDER\b", candidate, flags=re.IGNORECASE):
-    continue
+
             return _normalize_id(candidate)
 
     return None
