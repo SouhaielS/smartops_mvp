@@ -10,6 +10,7 @@ import pandas as pd
 
 from src.extract_invoice import extract_invoice_fields
 
+# Force logging in hosted env (Streamlit can override logging)
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s:%(name)s:%(message)s",
@@ -17,10 +18,13 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("run_batch")
-logger.info("DEBUG_RUN_BATCH_FILE: %s", __file__)
 
 
-def run_batch(invoice_dir: str | Path, po_register_path: str | Path, output_workbook_path: str | Path) -> None:
+def run_batch(
+    invoice_dir: str | Path,
+    po_register_path: str | Path,
+    output_workbook_path: str | Path,
+) -> None:
     batch_id = uuid.uuid4().hex[:10]
     processed_at = datetime.utcnow().isoformat(timespec="seconds")
 
@@ -28,12 +32,15 @@ def run_batch(invoice_dir: str | Path, po_register_path: str | Path, output_work
     po_register_path = Path(po_register_path)
     output_workbook_path = Path(output_workbook_path)
 
+    # Put file path info inside always-visible logs
+    logger.info("RUN_BATCH_FILE: %s", __file__)
+
     logger.info("Batch ID: %s | Processed at: %s", batch_id, processed_at)
     logger.info("Invoice dir: %s", invoice_dir)
     logger.info("PO register: %s", po_register_path)
     logger.info("Output workbook: %s", output_workbook_path)
 
-    # Load PO register (kept for future controls)
+    # Load PO register (kept for later controls)
     _po_df = pd.read_excel(po_register_path)
 
     results: List[Dict] = []
@@ -41,10 +48,7 @@ def run_batch(invoice_dir: str | Path, po_register_path: str | Path, output_work
     for pdf_path in invoice_dir.glob("*.pdf"):
         logger.info("Processing: %s", pdf_path.name)
 
-        # ✅ MUST appear in logs
-        logger.info("DEBUG_CALL_EXTRACTOR: %s", pdf_path)
         fields = extract_invoice_fields(pdf_path)
-        logger.info("DEBUG_EXTRACT_RESULT: %s", fields)
 
         po_number = fields.get("po_number")
         invoice_number = fields.get("invoice_number")
@@ -76,7 +80,8 @@ def run_batch(invoice_dir: str | Path, po_register_path: str | Path, output_work
             }
         )
 
-        logger.info("Status: %s | Reason: %s", status, reason)
+        # ✅ GUARANTEED diagnosis: fields printed inside Status line
+        logger.info("Status: %s | Reason: %s | Fields: %s", status, reason, fields)
 
     output_workbook_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(results).to_excel(output_workbook_path, index=False)
