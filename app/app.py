@@ -6,33 +6,18 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
-import os
-import sys
 
-# Ensure project root is on PYTHONPATH so "src" can be imported on Streamlit Cloud
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
-from src.run_batch import run_batch
+from src.run_batch_prod import run_batch_prod
 
-# Show which file run_batch is imported from
 logging.getLogger("run_batch").info(
-    "DEBUG_IMPORT_run_batch_FROM: %s", inspect.getfile(run_batch)
+    "DEBUG_IMPORT_run_batch_prod_FROM: %s", inspect.getfile(run_batch_prod)
 )
 
 st.set_page_config(page_title="SmartOps MVP - Batch", layout="wide")
 st.title("SmartOps MVP — Invoice Batch Processor")
 
-uploaded_invoices = st.file_uploader(
-    "Upload invoice PDFs",
-    type=["pdf"],
-    accept_multiple_files=True,
-)
-uploaded_po = st.file_uploader(
-    "Upload PO Register (Excel)",
-    type=["xlsx"],
-    accept_multiple_files=False,
-)
+uploaded_invoices = st.file_uploader("Upload invoice PDFs", type=["pdf"], accept_multiple_files=True)
+uploaded_po = st.file_uploader("Upload PO Register (Excel)", type=["xlsx"], accept_multiple_files=False)
 
 if st.button("▶ Run Batch", type="primary"):
     if not uploaded_invoices:
@@ -59,8 +44,7 @@ if st.button("▶ Run Batch", type="primary"):
 
             out_path = data_dir / "Batch_Output.xlsx"
 
-            # ✅ Positional call (avoids keyword mismatch forever)
-            run_batch(invoices_dir, po_path, out_path)
+            run_batch_prod(invoices_dir, po_path, out_path)
 
             if out_path.exists():
                 st.success("Batch completed ✅")
