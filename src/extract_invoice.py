@@ -169,21 +169,31 @@ def _extract_fields_from_text(
         inv = _extract_invoice_heuristic(text)
 
     # ---------------- Amount patterns ----------------
-    amount_patterns = [
-        r"\bTotal\s*TTC\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
-        r"\b(?:Net\s*(?:to\s*pay|à\s*payer)|Amount\s*Due)\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
-        r"\bTotal\s*(?:Amount)?\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
-        r"\bMontant\s*(?:TTC|Total)\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
-    ]
+       # ---------------- Amount extraction ----------------
+    amt = None
 
-    amt_raw = None
-    for pat in amount_patterns:
-        m = re.search(pat, text, flags=re.IGNORECASE)
-        if m:
-            amt_raw = m.group(1)
-            break
+    # 1) Strong rule: if we see "Total TTC", take the first amount within the next few lines
+    m_ttc = re.search(r"\bTotal\s*TTC\b", text, flags=re.IGNORECASE)
+    if m_ttc:
+        window = text[m_ttc.end(): m_ttc.end() + 250]  # ~next 4-8 lines typically
+        m_amt = re.search(r"([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)\b", window, flags=re.IGNORECASE)
+        if m_amt:
+            amt = _parse_amount(m_amt.group(1))
 
-    amt = _parse_amount(amt_raw) if amt_raw else None
+    # 2) Fallbacks if TTC not found or amount still None
+    if amt is None:
+        fallback_patterns = [
+            r"\bNet\s*(?:to\s*pay|à\s*payer)\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+            r"\bAmount\s*Due\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+            r"\bMontant\s*(?:TTC|Total)\b\s*[:#]?\s*[\s\n]*([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+        ]
+        amt_raw = None
+        for pat in fallback_patterns:
+            m = re.search(pat, text, flags=re.IGNORECASE)
+            if m:
+                amt_raw = m.group(1)
+                break
+        amt = _parse_amount(amt_raw) if amt_raw else None
 
     return po, inv, amt
 
