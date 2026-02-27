@@ -36,7 +36,14 @@ def _load_history(history_path: Path) -> pd.DataFrame:
             logger.exception("Failed to read history file %s: %s", history_path, e)
 
     return pd.DataFrame(
-        columns=["invoice_number", "po_number", "invoice_amount", "file_name", "batch_id", "processed_at"]
+        columns=[
+            "invoice_number",
+            "po_number",
+            "invoice_amount",
+            "file_name",
+            "batch_id",
+            "processed_at",
+        ]
     )
 
 
@@ -54,6 +61,40 @@ def _append_to_history(existing: pd.DataFrame, new_rows: pd.DataFrame) -> pd.Dat
         combined = combined.drop_duplicates(subset=["invoice_number"], keep="first")
 
     return combined
+
+
+def _ensure_po_columns(po_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure minimum columns exist and are correctly typed.
+    We only need these for real budget reduction.
+    """
+    # normalize column names (keep original but trim)
+    po_df.columns = [str(c).strip() for c in po_df.columns]
+
+    if "PO_Number" not in po_df.columns:
+        raise ValueError("PO register is missing required column: PO_Number")
+
+    po_df["PO_Number"] = po_df["PO_Number"].astype(str).str.strip()
+
+    # Create columns if they don't exist
+    for col in ["Total_PO_Value", "Amount_Already_Invoiced", "Remaining_Budget"]:
+        if col not in po_df.columns:
+            po_df[col] = 0.0
+
+    # Numeric safety
+    for col in ["Total_PO_Value", "Amount_Already_Invoiced", "Remaining_Budget"]:
+        po_df[col] = pd.to_numeric(po_df[col], errors="coerce").fillna(0.0).astype(float)
+
+    # If Remaining_Budget is zero but Total_PO_Value exists, derive it
+    # (does not overwrite non-zero Remaining_Budget)
+    mask_zero_remaining = (po_df["Remaining_Budget"] == 0) & (po_df["Total_PO_Value"] > 0)
+    if mask_zero_remaining.any():
+        po_df.loc[mask_zero_remaining, "Remaining_Budget"] = (
+            po_df.loc[mask_zero_remaining, "Total_PO_Value"]
+            - po_df.loc[mask_zero_remaining, "Amount_Already_Invoiced"]
+        )
+
+    return po_df
 
 
 def run_batch_prod(
@@ -80,12 +121,19 @@ def run_batch_prod(
     logger.info("Output workbook: %s", output_workbook_path)
     logger.info("History file: %s", history_path)
 
-    # Load PO register
+    # -------------------------------
+    # Load PO register (safe typing)
+    # -------------------------------
     po_df = pd.read_excel(po_register_path)
+    po_df = _ensure_po_columns(po_df)
 
+    # -------------------------------
     # Load history
+    # -------------------------------
     history_df = _load_history(history_path)
-    history_inv_set = set(_normalize_str_series(history_df.get("invoice_number", pd.Series(dtype=str))).tolist())
+    history_inv_set = set(
+        _normalize_str_series(history_df.get("invoice_number", pd.Series(dtype=str))).tolist()
+    )
 
     results: List[Dict] = []
 
@@ -165,6 +213,68 @@ def run_batch_prod(
             logger.info("Duplicates in batch: %s", int(dup_batch_mask.sum()))
         if dup_hist_mask.any():
             logger.info("Duplicates in history: %s", int(dup_hist_mask.sum()))
+
+    # -------------------------------
+    # REAL PO Budget Update (VALID only)
+    # - Decrease Remaining_Budget
+    # - Increase Amount_Already_Invoiced
+    # -------------------------------
+    # add tracking columns (nice for audit)
+    for col in ["remaining_before", "remaining_after", "po_row_index"]:
+        if col not in batch_df.columns:
+            batch_df[col] = None
+
+    # normalize po_number column for matching
+    if "po_number" in batch_df.columns:
+        batch_df["po_number"] = _normalize_str_series(batch_df["po_number"])
+
+    for idx, row in batch_df.iterrows():
+        if row.get("status") != "VALID":
+            continue
+
+        po_number = str(row.get("po_number") or "").strip()
+        invoice_amount = row.get("invoice_amount")
+
+        try:
+            inv_amt = float(invoice_amount) if invoice_amount is not None else 0.0
+        except Exception:
+            inv_amt = 0.0
+
+        if not po_number or inv_amt <= 0:
+            batch_df.at[idx, "status"] = "NEEDS_REVIEW"
+            batch_df.at[idx, "reason"] = "Invalid PO number or invoice amount"
+            continue
+
+        matches = po_df[po_df["PO_Number"] == po_number]
+
+        if matches.empty:
+            batch_df.at[idx, "status"] = "PO_NOT_FOUND"
+            batch_df.at[idx, "reason"] = f"PO {po_number} not found in register"
+            continue
+
+        po_index = int(matches.index[0])
+
+        remaining_before = float(po_df.at[po_index, "Remaining_Budget"])
+        already_before = float(po_df.at[po_index, "Amount_Already_Invoiced"])
+
+        # Overbudget protection
+        if inv_amt > remaining_before:
+            batch_df.at[idx, "status"] = "OVERBUDGET"
+            batch_df.at[idx, "reason"] = (
+                f"Invoice {inv_amt} exceeds Remaining_Budget {remaining_before}"
+            )
+            batch_df.at[idx, "remaining_before"] = remaining_before
+            batch_df.at[idx, "remaining_after"] = remaining_before
+            batch_df.at[idx, "po_row_index"] = po_index
+            continue
+
+        # Apply real update
+        po_df.at[po_index, "Amount_Already_Invoiced"] = already_before + inv_amt
+        po_df.at[po_index, "Remaining_Budget"] = remaining_before - inv_amt
+
+        batch_df.at[idx, "remaining_before"] = remaining_before
+        batch_df.at[idx, "remaining_after"] = remaining_before - inv_amt
+        batch_df.at[idx, "po_row_index"] = po_index
 
     # -------------------------------
     # Update persistent history (VALID only)
