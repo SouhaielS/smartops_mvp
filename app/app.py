@@ -9,17 +9,13 @@ import streamlit as st
 
 from src.run_batch import run_batch
 
-# Log where run_batch is imported from (must appear in hosted logs)
+# Show which file run_batch is imported from
 logging.getLogger("run_batch").info(
     "DEBUG_IMPORT_run_batch_FROM: %s", inspect.getfile(run_batch)
 )
 
 st.set_page_config(page_title="SmartOps MVP - Batch", layout="wide")
 st.title("SmartOps MVP — Invoice Batch Processor")
-
-st.write(
-    "Upload invoices (PDF) + PO Register (XLSX), then run batch to generate Batch_Output.xlsx."
-)
 
 uploaded_invoices = st.file_uploader(
     "Upload invoice PDFs",
@@ -43,6 +39,7 @@ if st.button("▶ Run Batch", type="primary"):
     with st.spinner("Running batch..."):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
+
             invoices_dir = tmp / "invoices"
             data_dir = tmp / "data"
             invoices_dir.mkdir(parents=True, exist_ok=True)
@@ -56,7 +53,7 @@ if st.button("▶ Run Batch", type="primary"):
 
             out_path = data_dir / "Batch_Output.xlsx"
 
-            # Use positional args to avoid any keyword mismatch surprises
+            # ✅ Positional call (avoids keyword mismatch forever)
             run_batch(invoices_dir, po_path, out_path)
 
             if out_path.exists():

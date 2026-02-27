@@ -10,7 +10,6 @@ import pandas as pd
 
 from src.extract_invoice import extract_invoice_fields
 
-# Force logging in hosted envs (Streamlit Cloud can override logging)
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s:%(name)s:%(message)s",
@@ -21,11 +20,7 @@ logger = logging.getLogger("run_batch")
 logger.info("DEBUG_RUN_BATCH_FILE: %s", __file__)
 
 
-def run_batch(
-    invoice_dir: str | Path,
-    po_register_path: str | Path,
-    output_workbook_path: str | Path,
-) -> None:
+def run_batch(invoice_dir: str | Path, po_register_path: str | Path, output_workbook_path: str | Path) -> None:
     batch_id = uuid.uuid4().hex[:10]
     processed_at = datetime.utcnow().isoformat(timespec="seconds")
 
@@ -38,7 +33,7 @@ def run_batch(
     logger.info("PO register: %s", po_register_path)
     logger.info("Output workbook: %s", output_workbook_path)
 
-    # Load PO register (kept for future checks; not used yet)
+    # Load PO register (kept for future controls)
     _po_df = pd.read_excel(po_register_path)
 
     results: List[Dict] = []
@@ -46,7 +41,7 @@ def run_batch(
     for pdf_path in invoice_dir.glob("*.pdf"):
         logger.info("Processing: %s", pdf_path.name)
 
-        # Debug around extractor (must appear in logs)
+        # ✅ MUST appear in logs
         logger.info("DEBUG_CALL_EXTRACTOR: %s", pdf_path)
         fields = extract_invoice_fields(pdf_path)
         logger.info("DEBUG_EXTRACT_RESULT: %s", fields)
