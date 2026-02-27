@@ -133,7 +133,7 @@ def _extract_invoice_heuristic(text: str) -> Optional[str]:
 # Field extraction
 # --------------------------------------------------
 def _extract_fields_from_text(
-    text: str
+    text: str,
 ) -> Tuple[Optional[str], Optional[str], Optional[float]]:
 
     po_patterns = [
@@ -188,18 +188,23 @@ def extract_invoice_fields(pdf_path: str | Path) -> Dict[str, object]:
             "po_number": None,
             "invoice_number": None,
             "invoice_amount": None,
+            "_debug_text_preview": "",
         }
 
     text = _clean_text(raw_text)
 
+    # ✅ Debug preview returned to caller (and can be written into Excel)
+    preview = text[:800] if text else ""
+
     logging.info("DEBUG_TEXT_LEN: %s", len(text))
-    logging.info("DEBUG_PDF_TEXT_PREVIEW: %s", text[:800])
+    logging.info("DEBUG_PDF_TEXT_PREVIEW: %s", preview)
 
     if not text:
         return {
             "po_number": None,
             "invoice_number": None,
             "invoice_amount": None,
+            "_debug_text_preview": "",
         }
 
     po, inv, amt = _extract_fields_from_text(text)
@@ -210,4 +215,5 @@ def extract_invoice_fields(pdf_path: str | Path) -> Dict[str, object]:
         "po_number": po,
         "invoice_number": inv,
         "invoice_amount": amt,
+        "_debug_text_preview": preview,
     }
