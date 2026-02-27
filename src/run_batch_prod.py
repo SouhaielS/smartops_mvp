@@ -23,26 +23,28 @@ def _load_history(history_path: Path) -> pd.DataFrame:
     if history_path.exists():
         try:
             df = pd.read_excel(history_path)
-            # Normalize expected columns
-            for col in ["invoice_number", "po_number"]:
-                if col in df.columns:
-                    df[col] = df[col].fillna("").astype(str).str.strip()
+            if "invoice_number" in df.columns:
+                df["invoice_number"] = df["invoice_number"].fillna("").astype(str).str.strip()
+            if "po_number" in df.columns:
+                df["po_number"] = df["po_number"].fillna("").astype(str).str.strip()
             return df
         except Exception as e:
             logger.exception("Failed to read history file %s: %s", history_path, e)
-            return pd.DataFrame(columns=["invoice_number", "po_number", "invoice_amount", "file_name", "batch_id", "processed_at"])
-    else:
-        return pd.DataFrame(columns=["invoice_number", "po_number", "invoice_amount", "file_name", "batch_id", "processed_at"])
+    return pd.DataFrame(
+        columns=["invoice_number", "po_number", "invoice_amount", "file_name", "batch_id", "processed_at"]
+    )
 
 
 def _append_to_history(history_path: Path, new_rows: pd.DataFrame) -> None:
     history_path.parent.mkdir(parents=True, exist_ok=True)
-
     existing = _load_history(history_path)
 
-    combined = pd.concat([existing, new_rows], ignore_index=True)
+    # Avoid pandas FutureWarning when existing is empty
+    if existing.empty:
+        combined = new_rows.copy()
+    else:
+        combined = pd.concat([existing, new_rows], ignore_index=True)
 
-    # Deduplicate history by invoice_number (keep the first occurrence)
     if "invoice_number" in combined.columns:
         inv = combined["invoice_number"].fillna("").astype(str).str.strip()
         combined = combined.loc[inv.ne("")].copy()
@@ -64,8 +66,12 @@ def run_batch_prod(
     po_register_path = Path(po_register_path)
     output_workbook_path = Path(output_workbook_path)
 
-    # History file (persistent across batches)
-    history_path = Path("data") / "invoice_history.xlsx"
+    output_dir = output_workbook_path.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # ✅ Put history + PO updated in the SAME output folder (so you can download them)
+    history_path = output_dir / "invoice_history.xlsx"
+    po_updated_path = output_dir / "PO_Register_Updated.xlsx"
 
     logger.info("RUN_BATCH_PROD_FILE: %s", __file__)
     logger.info("Batch ID: %s | Processed at: %s", batch_id, processed_at)
@@ -73,12 +79,21 @@ def run_batch_prod(
     logger.info("PO register: %s", po_register_path)
     logger.info("Output workbook: %s", output_workbook_path)
     logger.info("History file: %s", history_path)
+    logger.info("PO updated file: %s", po_updated_path)
 
-    # Load PO register (future checks)
+    # Load PO register
     try:
-        _po_df = pd.read_excel(po_register_path)
+        po_df = pd.read_excel(po_register_path)
     except Exception as e:
         logger.exception("Failed to load PO register: %s", e)
+        raise
+
+    # ✅ Always generate PO_Register_Updated.xlsx (for now it's a clean copy)
+    try:
+        po_df.to_excel(po_updated_path, index=False)
+        logger.info("PO_Register_Updated written successfully.")
+    except Exception as e:
+        logger.exception("Failed to write PO_Register_Updated: %s", e)
         raise
 
     # Load history once
@@ -146,19 +161,17 @@ def run_batch_prod(
         logger.info("Result: %s | %s", status, reason or "OK")
 
     # -------------------------------
-    # Duplicate detection (batch)
+    # Duplicate detection (batch + history)
     # -------------------------------
     result_df = pd.DataFrame(results)
 
     if "invoice_number" in result_df.columns:
         inv_series = result_df["invoice_number"].fillna("").astype(str).str.strip()
 
-        # duplicates within same batch
         dup_batch_mask = inv_series.ne("") & inv_series.duplicated(keep=False)
         result_df.loc[dup_batch_mask, "status"] = "DUPLICATE"
         result_df.loc[dup_batch_mask, "reason"] = "Duplicate invoice_number in this batch"
 
-        # duplicates from history (only for those not already marked DUPLICATE)
         dup_hist_mask = inv_series.ne("") & inv_series.isin(history_inv_set) & (~dup_batch_mask)
         result_df.loc[dup_hist_mask, "status"] = "DUPLICATE_HISTORY"
         result_df.loc[dup_hist_mask, "reason"] = "Invoice already processed in previous batch"
@@ -171,21 +184,19 @@ def run_batch_prod(
     # -------------------------------
     # Save batch output
     # -------------------------------
-    output_workbook_path.parent.mkdir(parents=True, exist_ok=True)
     result_df.to_excel(output_workbook_path, index=False)
     logger.info("Batch completed successfully.")
 
     # -------------------------------
     # Append VALID invoices to history
-    # (only those that are truly VALID)
     # -------------------------------
     valid_df = result_df[result_df["status"] == "VALID"].copy()
 
     if not valid_df.empty:
-        hist_rows = valid_df[["invoice_number", "po_number", "invoice_amount", "file_name", "batch_id", "processed_at"]].copy()
-        # Normalize invoice_number before writing
+        hist_rows = valid_df[
+            ["invoice_number", "po_number", "invoice_amount", "file_name", "batch_id", "processed_at"]
+        ].copy()
         hist_rows["invoice_number"] = hist_rows["invoice_number"].fillna("").astype(str).str.strip()
-
         _append_to_history(history_path, hist_rows)
         logger.info("History updated with %s VALID invoices.", len(hist_rows))
     else:

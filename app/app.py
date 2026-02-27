@@ -8,10 +8,8 @@ from pathlib import Path
 
 import streamlit as st
 
-# ------------------------------------------------------------
 # Make project root importable so "src" can be imported
-# ------------------------------------------------------------
-PROJECT_ROOT = Path(__file__).resolve().parents[1]  # smartops_mvp/
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -52,15 +50,37 @@ if st.button("▶ Run Batch", type="primary"):
 
             out_path = data_dir / "Batch_Output.xlsx"
 
+            # run
             run_batch_prod(invoices_dir, po_path, out_path)
+
+            # expected extra outputs in same folder as out_path
+            hist_path = out_path.parent / "invoice_history.xlsx"
+            po_updated_path = out_path.parent / "PO_Register_Updated.xlsx"
 
             if out_path.exists():
                 st.success("Batch completed ✅")
+
                 st.download_button(
                     "⬇ Download Batch_Output.xlsx",
                     data=out_path.read_bytes(),
                     file_name="Batch_Output.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
+
+                if hist_path.exists():
+                    st.download_button(
+                        "⬇ Download invoice_history.xlsx",
+                        data=hist_path.read_bytes(),
+                        file_name="invoice_history.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+
+                if po_updated_path.exists():
+                    st.download_button(
+                        "⬇ Download PO_Register_Updated.xlsx",
+                        data=po_updated_path.read_bytes(),
+                        file_name="PO_Register_Updated.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
             else:
-                st.error("Batch finished but output file was not created. Check logs.")
+                st.error("Batch finished but Batch_Output.xlsx was not created. Check logs.")
