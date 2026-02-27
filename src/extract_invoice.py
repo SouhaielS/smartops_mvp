@@ -165,12 +165,18 @@ def _extract_fields_from_text(
     ]
 
     amount_patterns = [
-        r"\bTotal\s*(?:Amount)?\s*[:#]?\s*([0-9][0-9\s.,]+)\b",
-        r"\bAmount\s*Due\s*[:#]?\s*([0-9][0-9\s.,]+)\b",
-        r"\bNet\s*(?:to\s*pay|à\s*payer)\s*[:#]?\s*([0-9][0-9\s.,]+)\b",
-        r"\bTotal\s*TTC\s*[:#]?\s*([0-9][0-9\s.,]+)\b",
-        r"\bMontant\s*(?:TTC|Total)\s*[:#]?\s*([0-9][0-9\s.,]+)\b",
-    ]
+    # Total TTC (value may be on next line)
+    r"\bTotal\s*TTC\b\s*[:#]?\s*([\s\n]*)([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+
+    # Net à payer / Amount Due (value may be on next line)
+    r"\b(?:Net\s*(?:to\s*pay|à\s*payer)|Amount\s*Due)\b\s*[:#]?\s*([\s\n]*)([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+
+    # Total Amount
+    r"\bTotal\s*(?:Amount)?\b\s*[:#]?\s*([\s\n]*)([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+
+    # Montant Total / Montant TTC
+    r"\bMontant\s*(?:TTC|Total)\b\s*[:#]?\s*([\s\n]*)([0-9][0-9\s.,]+)\s*(?:DT|TND|Dinars?)?\b",
+]
 
     po = _find_first(po_patterns, text)
 
@@ -183,7 +189,13 @@ def _extract_fields_from_text(
     if inv is None:
         inv = _extract_invoice_heuristic(text)
 
-    amt_raw = _find_first(amount_patterns, text)
+    amt_raw = None
+for pat in amount_patterns:
+    m = re.search(pat, text, flags=re.IGNORECASE)
+    if m:
+        # amount is group(2)
+        amt_raw = m.group(2)
+        break
     amt = _parse_amount(amt_raw) if amt_raw else None
 
     return po, inv, amt
