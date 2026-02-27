@@ -6,7 +6,13 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
+import os
+import sys
 
+# Ensure project root is on PYTHONPATH so "src" can be imported on Streamlit Cloud
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 from src.run_batch import run_batch
 
 # Show which file run_batch is imported from
