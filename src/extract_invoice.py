@@ -81,12 +81,15 @@ def _parse_amount(raw: str) -> Optional[float]:
 def _extract_invoice_by_label(text: str) -> Optional[str]:
 
     label_patterns = [
-        r"(?:Invoice\s*(?:No\.?|Number|N°|Nº|Num(?:ber)?)"
-        r"|Facture\s*(?:N°|Nº|No\.?|Num(?:éro)?)"
-        r"|Bill\s*(?:No\.?|Number|N°|Nº)"
-        r"|Document\s*(?:No\.?|Number|N°|Nº)"
-        r"|Ref(?:erence)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9 \-\/_.]{2,60})"
-    ]
+    # ✅ captures: Facture N° SS-GMC-0825-001 (stops before PO_Number)
+    r"\bFacture\s*(?:N°|Nº|No\.?|Num(?:éro)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,60})(?=\s+PO[_\s-]*Number\b|\s*$)",
+
+    # generic fallback
+    r"(?:Invoice\s*(?:No\.?|Number|N°|Nº|Num(?:ber)?)"
+    r"|Bill\s*(?:No\.?|Number|N°|Nº)"
+    r"|Document\s*(?:No\.?|Number|N°|Nº)"
+    r"|Ref(?:erence)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9 \-\/_.]{2,60})",
+]
 
     for pat in label_patterns:
         m = re.search(pat, text, flags=re.IGNORECASE)
@@ -143,6 +146,7 @@ def _extract_fields_from_text(
 
     po_patterns = [
     # PO: 2025003 / PO #2025003 / PO Number: 2025003
+    r"\bPO[_\s-]*(?:Number|No\.?|N°|#)?\s*[:#]?\s*([0-9]{3,20})\b",
     r"\bPO\s*(?:Number|No\.?|N°|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
 
     # Purchase Order: XXXXX
