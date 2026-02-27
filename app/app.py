@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import inspect
 import logging
+import sys
 import tempfile
 from pathlib import Path
 
 import streamlit as st
 
-from src.run_batch_prod import run_batch_prod
+# ------------------------------------------------------------
+# Make project root importable so "src" can be imported
+# ------------------------------------------------------------
+PROJECT_ROOT = Path(__file__).resolve().parents[1]  # smartops_mvp/
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.run_batch_prod import run_batch_prod  # noqa: E402
 
 logging.getLogger("run_batch").info(
     "DEBUG_IMPORT_run_batch_prod_FROM: %s", inspect.getfile(run_batch_prod)
