@@ -96,7 +96,9 @@ def _extract_invoice_by_label(text: str) -> Optional[str]:
 
             chunks = re.split(r"\s+", candidate)
             candidate = " ".join(chunks[:3])
-
+# Guardrails: don't accept values that look like placeholders/labels
+if re.search(r"\bPO_NUMBER\b|\bPO\s*NUMBER\b|\bPURCHASE\s*ORDER\b", candidate, flags=re.IGNORECASE):
+    continue
             return _normalize_id(candidate)
 
     return None
@@ -137,10 +139,18 @@ def _extract_fields_from_text(
 ) -> Tuple[Optional[str], Optional[str], Optional[float]]:
 
     po_patterns = [
-        r"\bPO\s*[:#]?\s*([A-Z0-9\-\/]+)\b",
-        r"\bP\.?O\.?\s*Number\s*[:#]?\s*([A-Z0-9\-\/]+)\b",
-        r"\bBon\s+de\s+commande\s*[:#]?\s*([A-Z0-9\-\/]+)\b",
-    ]
+    # PO: 2025003 / PO #2025003 / PO Number: 2025003
+    r"\bPO\s*(?:Number|No\.?|N°|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
+
+    # Purchase Order: XXXXX
+    r"\bPurchase\s*Order\s*(?:Number|No\.?|N°|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
+
+    # Bon de commande: XXXXX
+    r"\bBon\s+de\s+commande\s*(?:Num(?:éro)?|N°|No\.?|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
+
+    # PO reference: XXXXX
+    r"\bPO\s*(?:Ref(?:erence)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/_.]{2,40})\b",
+]
 
     inv_patterns = [
         r"\b(INV[\-\/_.]?[0-9A-Z][0-9A-Z\-\/_.]{2,})\b",
